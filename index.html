@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image to SVG Converter</title>
+    <title>Optimized Image to SVG Converter</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -42,6 +42,15 @@
             background: #0056b3;
         }
 
+        label {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .settings {
+            margin-bottom: 20px;
+        }
+
         .download-btn {
             margin-top: 20px;
             padding: 10px 20px;
@@ -52,7 +61,6 @@
             border-radius: 5px;
             cursor: pointer;
             display: none;
-            /* Initially hidden */
         }
 
         .download-btn:hover {
@@ -72,6 +80,16 @@
     <div class="container">
         <h1>Image to SVG Converter</h1>
         <input type="file" id="uploadImage" accept="image/*" />
+        <div class="settings">
+            <label>
+                Resolution Scale (1-10):
+                <input type="number" id="resolutionScale" placeholder="Enter scale (e.g., 3)" value="3" />
+            </label>
+            <label>
+                Color Step (Reduce Colors):
+                <input type="number" id="colorStep" placeholder="Color step (e.g., 16)" value="16" />
+            </label>
+        </div>
         <canvas id="canvas" style="display: none;"></canvas>
         <button id="convertBtn">Convert to SVG</button>
         <div id="svgOutput"></div>
@@ -85,9 +103,11 @@
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
         const svgOutput = document.getElementById("svgOutput");
+        const resolutionScaleInput = document.getElementById("resolutionScale");
+        const colorStepInput = document.getElementById("colorStep");
 
         let uploadedImage = null;
-        let generatedSVG = ""; // To store the generated SVG for downloading
+        let generatedSVG = "";
 
         // Load and draw the uploaded image on the canvas
         uploadImage.addEventListener("change", (event) => {
@@ -97,9 +117,13 @@
                 reader.onload = (e) => {
                     const img = new Image();
                     img.onload = () => {
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        ctx.drawImage(img, 0, 0);
+                        const scale = parseInt(resolutionScaleInput.value) || 3;
+
+                        canvas.width = img.width / scale;
+                        canvas.height = img.height / scale;
+
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                         uploadedImage = img;
                     };
                     img.src = e.target.result;
@@ -118,28 +142,49 @@
             }
 
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            generatedSVG = convertImageToSVG(imageData);
+            const colorStep = parseInt(colorStepInput.value) || 16;
+
+            generatedSVG = convertImageToSVG(imageData, colorStep);
             svgOutput.innerHTML = generatedSVG;
 
             // Enable and display the download button
             downloadBtn.style.display = "block";
         });
 
-        // Convert canvas image data to SVG
-        function convertImageToSVG(imageData) {
+        // Convert canvas image data to optimized SVG
+        function convertImageToSVG(imageData, colorStep) {
             const { width, height, data } = imageData;
-            let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`;
+            let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">`;
 
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const index = (y * width + x) * 4;
-                    const r = data[index];
-                    const g = data[index + 1];
-                    const b = data[index + 2];
-                    const a = data[index + 3] / 255; // Normalize alpha to 0-1
+            const rectSize = 3; // Group pixels into 3x3 rectangles for optimization
+            for (let y = 0; y < height; y += rectSize) {
+                for (let x = 0; x < width; x += rectSize) {
+                    let rTotal = 0, gTotal = 0, bTotal = 0, aTotal = 0, count = 0;
+
+                    // Average colors in the group
+                    for (let dy = 0; dy < rectSize; dy++) {
+                        for (let dx = 0; dx < rectSize; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+
+                            if (nx < width && ny < height) {
+                                const index = (ny * width + nx) * 4;
+                                rTotal += data[index];
+                                gTotal += data[index + 1];
+                                bTotal += data[index + 2];
+                                aTotal += data[index + 3];
+                                count++;
+                            }
+                        }
+                    }
+
+                    const r = Math.round((rTotal / count) / colorStep) * colorStep;
+                    const g = Math.round((gTotal / count) / colorStep) * colorStep;
+                    const b = Math.round((bTotal / count) / colorStep) * colorStep;
+                    const a = ((aTotal / count) / 255).toFixed(2); // Normalize alpha
 
                     if (a > 0) {
-                        svgContent += `<rect x="${x}" y="${y}" width="1" height="1" fill="rgba(${r},${g},${b},${a})" />`;
+                        svgContent += `<rect x="${x}" y="${y}" width="${rectSize}" height="${rectSize}" fill="rgba(${r},${g},${b},${a})" />`;
                     }
                 }
             }
@@ -159,7 +204,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = "converted-image.svg";
+            a.download = "optimized-image.svg";
             a.click();
             URL.revokeObjectURL(url);
         });
