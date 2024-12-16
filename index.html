@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to SVG Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            text-align: center;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        input[type="file"] {
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            color: #fff;
+            background: #007BFF;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .download-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            color: #fff;
+            background: #28a745;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none;
+            /* Initially hidden */
+        }
+
+        .download-btn:hover {
+            background: #218838;
+        }
+
+        #svgOutput {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background: #fafafa;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Image to SVG Converter</h1>
+        <input type="file" id="uploadImage" accept="image/*" />
+        <canvas id="canvas" style="display: none;"></canvas>
+        <button id="convertBtn">Convert to SVG</button>
+        <div id="svgOutput"></div>
+        <button class="download-btn" id="downloadBtn">Download SVG</button>
+    </div>
+
+    <script>
+        const uploadImage = document.getElementById("uploadImage");
+        const convertBtn = document.getElementById("convertBtn");
+        const downloadBtn = document.getElementById("downloadBtn");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const svgOutput = document.getElementById("svgOutput");
+
+        let uploadedImage = null;
+        let generatedSVG = ""; // To store the generated SVG for downloading
+
+        // Load and draw the uploaded image on the canvas
+        uploadImage.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith("image/")) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+                        uploadedImage = img;
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                alert("Please upload a valid image.");
+            }
+        });
+
+        // Convert the image to SVG and display it
+        convertBtn.addEventListener("click", () => {
+            if (!uploadedImage) {
+                alert("Please upload an image first.");
+                return;
+            }
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            generatedSVG = convertImageToSVG(imageData);
+            svgOutput.innerHTML = generatedSVG;
+
+            // Enable and display the download button
+            downloadBtn.style.display = "block";
+        });
+
+        // Convert canvas image data to SVG
+        function convertImageToSVG(imageData) {
+            const { width, height, data } = imageData;
+            let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`;
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const index = (y * width + x) * 4;
+                    const r = data[index];
+                    const g = data[index + 1];
+                    const b = data[index + 2];
+                    const a = data[index + 3] / 255; // Normalize alpha to 0-1
+
+                    if (a > 0) {
+                        svgContent += `<rect x="${x}" y="${y}" width="1" height="1" fill="rgba(${r},${g},${b},${a})" />`;
+                    }
+                }
+            }
+
+            svgContent += "</svg>";
+            return svgContent;
+        }
+
+        // Download the generated SVG
+        downloadBtn.addEventListener("click", () => {
+            if (!generatedSVG) {
+                alert("Please generate an SVG first.");
+                return;
+            }
+
+            const blob = new Blob([generatedSVG], { type: "image/svg+xml" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "converted-image.svg";
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    </script>
+</body>
+
+</html>
